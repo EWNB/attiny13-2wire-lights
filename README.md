@@ -18,9 +18,61 @@ Reverse the voltage difference across the wires and the first group of LEDs will
 Repeat this fast enough, say 4000 times a second, and to the human eye it appears that all the LEDs are shining bright.
 Mutual or opposing dimming/flashing/pulsing of the two groups can be achieved by carefully adjusting the proportion of time spent in one of these three states.
 
-## Circuit
+## Circuit V1
 
-Coming soon...
+Here is my first circuit.
+It works reasonably well, but has a few things that could be improved.
+
+![A circuit diagram depicting a 4.5V battery, power switch, decoupling capacitor, some mode-select switches between pull-ups and weaker pull-downs, a variable resistor in series with one leg of two-wire fairy lights, and all connected to an ATTINY13A micro-controller](circuit-v1.svg)
+
+| ATTINY13A | Signal |
+| --------- | ------ |
+| 1 (PB5)   | N/C    |
+| 2 (PB3)   | mode0  |
+| 3 (PB4)   | mode1  |
+| 4 (GND)   | GND    |
+| 5 (PB0)   | pwm0   |
+| 6 (PB1)   | pwm1   |
+| 7 (PB2)   | N/C    |
+| 8 (VCC)   | VCC    |
+
+### Power and mode switches
+
+A true on-off power switch was desirable over a soft power switch.
+The original electronics used a single momentary switch to both act as a soft power switch and to cycle through modes.
+I surmise this must have meant the circuit was always powered to some extent, and may have led to the batteries over-discharging and leaking destructive acid everywhere.
+
+I used external pull-ups instead of the internal 20-50 kOhm ones.
+External ones could be a higher resistance, and thus reduce the current consumed when a mode switch is closed.
+It may not matter much though, and in more space-constrained circumstances they could be omitted and the internal pull-ups enabled in software.
+
+Even more space and power efficient would be to remove the mode switches entirely.
+A single momentary switch could be used to cycle between many modes instead of a few modes and switches.
+The onboard EEPROM non-volatile memory could be used to store the current mode across power cycles.
+
+A further optimisation would be to reuse the power switch to also cycle between modes, without resorting to a soft power switch.
+A single additional EPPROM bit and one second counter should be all that is required.
+On power-up, set an EPPROM bit to represent 'recently powered-up'.
+After a second or so of real time has elapsed, clear the bit.
+If on power-up the bit is already set, then advance the mode.
+This allows quick ON-OFF-ON power cycles to control the mode without any additional components.
+I should give this a go in my next circuit...
+
+### Current control
+
+Controlling the maximum current through the load (fairy lights) is easily done by adding a series resistor, as in this circuit, but it has drawbacks.
+Having the resistor or other source of resistance means some of the battery power is wasted as heat.
+A lower resistance would lower the power wasted, but increase total power consumption as more current flows through the load.
+This could be countered by limiting the time in each PWM cycle when the load is conducting, but this would lower the effective dimming resolution.
+
+Another factor is user adjustment.
+I would rather like to be able to adjust the brightness of the fairy lights without having to break out my soldering iron, which is why I used a variable resistor instead of a fixed one.
+What I hadn't thought of is the inductance some kinds of variable resistor can add.
+Inductance here would also waste energy and reduce the energy transfer into the load, not ideal.
+Perhaps some fixed resistors and bypass switches would be better, or a variable resistor with lass inductance.
+
+Finally there is the effect of decreasing battery voltage on light output.
+You could try to measure it and counter it somehow, but I rather like the lights getting dimmer as a sign the batteries are running low.
 
 ## Prerequisites
 
