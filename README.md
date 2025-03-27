@@ -23,7 +23,7 @@ Mutual or opposing dimming/flashing/pulsing of the two groups can be achieved by
 Here is my first circuit.
 It works reasonably well, but has a few things that could be improved.
 
-![A circuit diagram depicting a 4.5V battery, power switch, decoupling capacitor, some mode-select switches between pull-ups and weaker pull-downs, a variable resistor in series with one leg of two-wire fairy lights, and all connected to an ATTINY13A micro-controller](circuit-v1.svg)
+![A circuit diagram depicting a 4.5V battery, power switch, decoupling capacitor, some mode-select switches between pull-ups and weaker pull-downs, a variable resistor in series with one leg of two-wire fairy lights, and all connected to an ATTINY13A micro-controller](circuit-v1-out.svg)
 
 | ATTINY13A | Signal |
 | --------- | ------ |
