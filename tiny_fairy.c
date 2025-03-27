@@ -43,7 +43,7 @@ void main() {
   // Set OC0A + OC0B as outputs, other pins as inputs
   DDRB = 0b00000011;
 
-  // Enable pull-ups on PB3 + PB4
+  // // Enable pull-ups on PB3 + PB4
   // PORTB = 0b00011000;
 
   // Enable timer overflow interrupt
