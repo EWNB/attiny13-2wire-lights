@@ -58,7 +58,7 @@ If on power-up the bit is already set, then advance the mode.
 This allows quick ON-OFF-ON power cycles to control the mode without any additional components.
 I should give this a go in my next circuit...
 
-### Current control
+### Load current
 
 Controlling the maximum current through the load (fairy lights) is easily done by adding a series resistor, as in this circuit, but it has drawbacks.
 Having the resistor or other source of resistance means some of the battery power is wasted as heat.
@@ -73,6 +73,15 @@ Perhaps some fixed resistors and bypass switches would be better, or a variable 
 
 Finally there is the effect of decreasing battery voltage on light output.
 You could try to measure it and counter it somehow, but I rather like the lights getting dimmer as a sign the batteries are running low.
+
+### Battery current
+
+The reason I put the capacitor in was to try to reduce the fluctuations in current drawn from the battery (three AAA alkaline cells).
+When dimming, the fairy lights are fully-off for some portion of the PWM cycle, causing sudden changes of current when transitioning from on to off and from off to on.
+I find it hard to find evidence of the effect of high-frequency loads on relevant alkaline cells, but it seems to be a bad thing for lithium coin cells.
+Rather unscientifically, I just picked the spare capacitor with the largest capacitance that I could physically insert into the middle of the 8-DIP socket I insert the ATTINY into.
+Hopefully it is helping, and not just contributing to leakage current for no benefit.
+Perhaps  alkaline cells are happy regardless if the current is only a few milliamps.
 
 ## Prerequisites
 
