@@ -2,107 +2,124 @@
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
 
-const uint8_t OVERFLOW_COUNT_MASK = 0x3F;
+// Clock prescaler mappings.
+// Divisors 16, 32, 64, 128, & 256 have been omitted due to causing flickering.
+#define CLKDIV_1 ((0<<CLKPS3) | (0<<CLKPS2) | (0<<CLKPS1) | (0<<CLKPS0))
+#define CLKDIV_2 ((0<<CLKPS3) | (0<<CLKPS2) | (0<<CLKPS1) | (1<<CLKPS0))
+#define CLKDIV_4 ((0<<CLKPS3) | (0<<CLKPS2) | (1<<CLKPS1) | (0<<CLKPS0))
+#define CLKDIV_8 ((0<<CLKPS3) | (0<<CLKPS2) | (1<<CLKPS1) | (1<<CLKPS0))
 
-volatile uint8_t overflow_count;
-volatile uint8_t ocr0a_next;
-volatile uint8_t ocr0b_next;
-uint8_t fade_pos;
-uint8_t fade_dir;
-uint8_t mode;
+// SYS_CLK_PRESCALE: System clock prescaler
+// Increase for power savings. Decrease for shorter PWM cycles (less flicker).
+// Will also affect FADE_PERIOD, which is specified in PWM cycles.
+// - Units: prescaler divisor
+// - Range: 1, 2, 4, 8, 16, 32, 64, 128, 256
+#define SYS_CLK_PRESCALE CLKDIV_8
+
+// PWM cycle period = 9.6 MHz / (SYS_CLK_PRESCALE * 510)
+
+// FADE_PERIOD: Fade animation time period
+// Increase value for slower LED fade animations. Decrease for faster.
+// - Units: PWM cycles (hardware Timer/Counter 0 overflows)
+// - Range: 1-255
+#define FADE_PERIOD 64
+
+uint8_t ucCounter;
+uint8_t ucCompareA;
+uint8_t ucCompareB;
+uint8_t ucFadePos;
+uint8_t ucFadeDir;
+uint8_t ucMode;
 
 void main() {
-  cli();
+  ucCounter = FADE_PERIOD;
+  ucCompareA = 0;
+  ucCompareB = 0xFF;
+  ucFadePos = 0;
+  ucFadeDir = 0;
 
-  overflow_count = 0;
-  ocr0a_next = 0;
-  ocr0b_next = 0;
-  fade_pos = 0;
-  fade_dir = 0;
-  mode = 0;
-
+  // Set global clock prescaler to desired balance between power and flicker.
+  // This two-step sequence must be followed or the write will have no effect.
+  CLKPR = (1<<CLKPCE);      // step 1
+  CLKPR = SYS_CLK_PRESCALE; // step 2
   // Disable ADC to save power
-  PRR = 0b00000001;
+  PRR = (1<<PRADC);
   // Disable comparator to save power
-  ACSR = 0b10000000;
-
+  ACSR = (1<<ACD);
   // Timer/Counter 0 Control Register A
-  // OC0A set on up-compare, OC0B clear on up-compare, fast PWM
-  TCCR0A = 0b11100011;
-
+  // OC0A *set* on up-compare, OC0B *clear* on up-compare, fast PWM mode
+  TCCR0A = ((1<<COM0A1) | (1<<COM0A0) | (1<<COM0B1) | (0<<COM0B0) |
+            (1<<WGM01) | (1<<WGM00));
   // Timer/Counter 0 Control Register B
   // ATTINY13A default clock: 9.6 MHz int-osc & CKDIV8 -> 1.2 MHz
   // 1.2 MHz / (2 kHz * 510) = 1.18 -> no prescaler -> 2.353 kHz
-  // No force output compare, 0xFF TOP, no prescaler
-  TCCR0B = 0b00000001;
-
+  // No force output compare, 0xFF TOP, no additional clock prescaling
+  TCCR0B = ((0<<FOC0B) | (0<<FOC0A) | (0<<WGM02) |
+            (0<<CS02) | (0<<CS01) | (1<<CS00));
   // Inital compare values - LEDs off
-  OCR0A = 0x00;
-  OCR0B = 0xFF;
-
-  // Set OC0A + OC0B as outputs, other pins as inputs
-  DDRB = 0b00000011;
-
+  OCR0A = ucCompareA;
+  OCR0B = ucCompareB;
+  // Set PMW pins OC0A + OC0B as outputs, other pins as inputs
+  DDRB = (1<<DDB1) | (1<<DDB0);
   // // Enable pull-ups on PB3 + PB4
-  // PORTB = 0b00011000;
-
+  // PORTB = (1<<PORTB4) | (1<<PORTB3);
   // Enable timer overflow interrupt
-  TIMSK0 = 0b00000010;
+  TIMSK0 = (1<<TOIE0);
 
   while (1) {
-    if (!(overflow_count & OVERFLOW_COUNT_MASK)) {
+    if (ucCounter == 0) {
       // Check mode select inputs
-      mode = (PINB >> 3) & 0b11;
+      ucMode = (PINB >> 3) & 0b11;
 
       // Update outputs
-      if (mode == 0b00) {
+      if (ucMode == 0b00) {
         // Static
-        ocr0a_next = 0x80;
-        ocr0b_next = 0x80;
+        ucCompareA = 0x80;
+        ucCompareB = 0x80;
       } else {
         // Dynamic
-        if (mode == 0b01) {
+        if (ucMode == 0b01) {
           // Pulse together
-          ocr0a_next =        (fade_pos >> 1);
-          ocr0b_next = 0xFF - (fade_pos >> 1);
-        } else if (mode == 0b10) {
+          ucCompareA =        (ucFadePos>>1);
+          ucCompareB = 0xFF - (ucFadePos>>1);
+        } else if (ucMode == 0b10) {
           // Alternate - full
-          ocr0a_next = fade_pos;
-          ocr0b_next = fade_pos;
-        } else /*mode == 0b11*/ {
+          ucCompareA = ucFadePos;
+          ucCompareB = ucFadePos;
+        } else /*ucMode == 0b11*/ {
           // Alternate - pulse
-          if (fade_dir == 1) {
-            ocr0a_next = (fade_pos < 0x80) ?        (fade_pos << 1)
-                                           : 0xFF - (fade_pos << 1);
-            ocr0b_next = 0xFF;
+          uint8_t val = ucFadePos<<1;
+          if (ucFadeDir == 1) {
+            ucCompareA = (ucFadePos < 0x80) ? val : 0xFF - val;
+            ucCompareB = 0xFF;
           } else {
-            ocr0a_next = 0x00;
-            ocr0b_next = (fade_pos < 0x80) ? 0xFF - (fade_pos << 1)
-                                           :        (fade_pos << 1);
+            ucCompareA = 0x00;
+            ucCompareB = (ucFadePos < 0x80) ? 0xFF - val : val;
           }
         }
       }
       // Update fade cycle (0x00 -> 0xFF -> 0x00 -> ...)
-      fade_pos = fade_dir ? fade_pos + 1 : fade_pos - 1;
-      fade_dir = (fade_dir || fade_pos == 0) && fade_pos != 0xFF;
+      ucFadePos = ucFadeDir ? ucFadePos + 1 : ucFadePos - 1;
+      ucFadeDir = (ucFadeDir || ucFadePos == 0) && ucFadePos != 0xFF;
     }
 
     // https://www.nongnu.org/avr-libc/user-manual/group__avr__sleep.html
     set_sleep_mode(SLEEP_MODE_IDLE);
     sleep_enable();
-    // sleep_bod_disable();
     sei();
     sleep_cpu();
+    // ... processor sleeps until awoken by timer interrupt ...
     sleep_disable();
     cli();
   }
 }
 
 ISR(TIM0_OVF_vect) {
-  // Update timer compare values if count of timer overflows is divisible
-  // by target (power-of-2) period.
-  if (!(++overflow_count & OVERFLOW_COUNT_MASK)) {
-    OCR0A = ocr0a_next;
-    OCR0B = ocr0b_next;
+  // Update timer compare values if enough
+  if (ucCounter == 0) {
+    OCR0A = ucCompareA;
+    OCR0B = ucCompareB;
+    ucCounter = FADE_PERIOD;
   }
+  ucCounter--;
 }
