@@ -1,3 +1,10 @@
+// Copyright Elliot Baptist.
+// Licensed under the MIT License, see LICENSE for details.
+// SPDX-License-Identifier: MIT
+
+// tiny_fairy.c
+// Use an ATTINY13 to drive a simple two-wire two-group string of fairy lights.
+
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
