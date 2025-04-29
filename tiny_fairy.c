@@ -1,4 +1,4 @@
-// Copyright Elliot Baptist.
+// Copyright EWNB.
 // Licensed under the MIT License, see LICENSE for details.
 // SPDX-License-Identifier: MIT
 
@@ -28,8 +28,41 @@
 // FADE_PERIOD: Fade animation time period
 // Increase value for slower LED fade animations. Decrease for faster.
 // - Units: PWM cycles (hardware Timer/Counter 0 overflows)
-// - Range: 1-255
+// - Range: 2-255
 #define FADE_PERIOD 64
+
+// EEPROM addresses
+#define FLAG_ADDR 0
+#define MODE_ADDR 1
+
+enum mode {MODE_0, MODE_1, MODE_2, MODE_3, MAX_MODE};
+
+// Based on code snippet in Microchip ATtiny13A Datasheet (DS40002307A)
+uint8_t eeprom_read(uint8_t ucAddress) {
+  // Wait for completion of previous write
+  while (EECR & (1<<EEPE)) { ; }
+  // Set up address register
+  EEARL = ucAddress;
+  // Start EEPROM read by writing EERE
+  EECR |= (1<<EERE);
+  // Return data from data register
+  return EEDR;
+}
+
+// Based on code snippet in Microchip ATtiny13A Datasheet (DS40002307A)
+void eeprom_write(uint8_t ucAddress, uint8_t ucData) {
+  // Wait for completion of previous write
+  while (EECR & (1<<EEPE)) { ; }
+  // Set Programming Mode to erase and write (atomic)
+  EECR = (0<<EEPM1) | (0<<EEPM0);
+  // Set up address and data registers
+  EEARL = ucAddress;
+  EEDR = ucData;
+  // Write logical one to EEMPE
+  EECR |= (1<<EEMPE);
+  // Start EEPROM write by setting EEPE
+  EECR |= (1<<EEPE);
+}
 
 uint8_t ucCounter;
 uint8_t ucCompareA;
@@ -37,13 +70,15 @@ uint8_t ucCompareB;
 uint8_t ucFadePos;
 uint8_t ucFadeDir;
 uint8_t ucMode;
+uint8_t ucModeFixed;
 
 void main() {
   ucCounter = FADE_PERIOD;
   ucCompareA = 0;
   ucCompareB = 0xFF;
   ucFadePos = 0;
-  ucFadeDir = 0;
+  ucFadeDir = 1;
+  ucModeFixed = 0;
 
   // Set global clock prescaler to desired balance between power and flicker.
   // This two-step sequence must be followed or the write will have no effect.
@@ -68,44 +103,54 @@ void main() {
   OCR0B = ucCompareB;
   // Set PMW pins OC0A + OC0B as outputs, other pins as inputs
   DDRB = (1<<DDB1) | (1<<DDB0);
-  // // Enable pull-ups on PB3 + PB4
-  // PORTB = (1<<PORTB4) | (1<<PORTB3);
   // Enable timer overflow interrupt
   TIMSK0 = (1<<TOIE0);
 
-  while (1) {
-    if (ucCounter == 0) {
-      // Check mode select inputs
-      ucMode = (PINB >> 3) & 0b11;
+  // Fade mode - EEPROM reads
+  ucMode = eeprom_read(MODE_ADDR);
+  if (eeprom_read(FLAG_ADDR) == 1) {
+    if (++ucMode >= MAX_MODE) ucMode = MODE_0;
+  }
 
-      // Update outputs
-      if (ucMode == 0b00) {
+  while (1) {
+    if (ucCounter == 1 && ucModeFixed == 0) {
+      // Fade mode - EEPROM writes (can take time)
+      if (ucFadePos == 0x08) {
+        // Start of mode increment period
+        eeprom_write(FLAG_ADDR, 1);
+        eeprom_write(MODE_ADDR, ucMode);
+      } else if (ucFadePos == 0xFF) {
+        // End of mode increment period
+        eeprom_write(FLAG_ADDR, 0);
+        ucModeFixed = 1;
+        if (ucMode == MODE_0) TIMSK0 = (0<<TOIE0); // never wake from sleep
+      }
+    } else if (ucCounter == 0) {
+      // Fade animation - calculate next PWM values
+      if (ucMode == MODE_0) {
         // Static
         ucCompareA = 0x80;
         ucCompareB = 0x80;
-      } else {
-        // Dynamic
-        if (ucMode == 0b01) {
-          // Pulse together
-          ucCompareA =        (ucFadePos>>1);
-          ucCompareB = 0xFF - (ucFadePos>>1);
-        } else if (ucMode == 0b10) {
-          // Alternate - full
-          ucCompareA = ucFadePos;
-          ucCompareB = ucFadePos;
-        } else /*ucMode == 0b11*/ {
-          // Alternate - pulse
-          uint8_t val = ucFadePos<<1;
-          if (ucFadeDir == 1) {
-            ucCompareA = (ucFadePos < 0x80) ? val : 0xFF - val;
-            ucCompareB = 0xFF;
-          } else {
-            ucCompareA = 0x00;
-            ucCompareB = (ucFadePos < 0x80) ? 0xFF - val : val;
-          }
+      } else if (ucMode == MODE_1) {
+        // Pulse together
+        ucCompareA =        (ucFadePos>>1);
+        ucCompareB = 0xFF - (ucFadePos>>1);
+      } else if (ucMode == MODE_2) {
+        // Alternate - full
+        ucCompareA = ucFadePos;
+        ucCompareB = ucFadePos;
+      } else /*ucMode == MODE_3*/ {
+        // Alternate - pulse
+        uint8_t val = ucFadePos<<1;
+        if (ucFadeDir == 1) {
+          ucCompareA = (ucFadePos < 0x80) ? val : 0xFF - val;
+          ucCompareB = 0xFF;
+        } else {
+          ucCompareA = 0x00;
+          ucCompareB = (ucFadePos < 0x80) ? 0xFF - val : val;
         }
       }
-      // Update fade cycle (0x00 -> 0xFF -> 0x00 -> ...)
+      // Fade animation - advance position (0x00 -> 0xFF -> 0x00 -> ...)
       ucFadePos = ucFadeDir ? ucFadePos + 1 : ucFadePos - 1;
       ucFadeDir = (ucFadeDir || ucFadePos == 0) && ucFadePos != 0xFF;
     }

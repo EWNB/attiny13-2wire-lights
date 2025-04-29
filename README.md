@@ -18,10 +18,10 @@ Reverse the voltage difference across the wires and the first group of LEDs will
 Repeat this fast enough, say 4000 times a second, and to the human eye it appears that all the LEDs are shining bright.
 Mutual or opposing dimming/flashing/pulsing of the two groups can be achieved by carefully adjusting the proportion of time spent in one of these three states.
 
-## Circuit V1
+## Old Circuit - V1
 
 Here is my first circuit.
-It works reasonably well, but has a few things that could be improved.
+It worked reasonably well, but had a few things that could be improved.
 
 ![A circuit diagram depicting a 4.5V battery, power switch, decoupling capacitor, some mode-select switches between pull-ups and weaker pull-downs, a variable resistor in series with one leg of two-wire fairy lights, and all connected to an ATTINY13A micro-controller](circuit-v1.svg)
 
@@ -82,6 +82,40 @@ I find it hard to find evidence of the effect of high-frequency loads on relevan
 Rather unscientifically, I just picked the spare capacitor with the largest capacitance that I could physically insert into the middle of the 8-DIP socket I insert the ATTINY into.
 Hopefully it is helping, and not just contributing to leakage current for no benefit.
 Perhaps  alkaline cells are happy regardless if the current is only a few milliamps.
+
+## Current Circuit - V2
+
+Here is my second circuit.
+The separate mode switches are gone, and variable resistor replaced with fixed resistors with bypass switches.
+
+TODO: circuit diagram.
+
+| ATTINY13A | Signal |
+| --------- | ------ |
+| 1 (PB5)   | N/C    |
+| 2 (PB3)   | N/C    |
+| 3 (PB4)   | N/C    |
+| 4 (GND)   | GND    |
+| 5 (PB0)   | pwm0   |
+| 6 (PB1)   | pwm1   |
+| 7 (PB2)   | N/C    |
+| 8 (VCC)   | VCC    |
+
+### Combined power/mode switch
+
+The biggest change in the V2 circuit is the removal of the dedicated mode select switches and associated resistors.
+The new software uses the built-in EEPROM (non-volatile memory) to allow the user the increment the mode by enacting a short OFF-ON-OFF cycle using the power switch.
+This works by storing a flag and the current mode in EEPROM.
+The flag is set shortly, but crucially not immediately, after the ATTINY boots.
+The flag is cleared after half a fade animation cycle, even in static mode.
+If the flag is set when the ATTINY boots, it increments the mode.
+The internal EEPROM is rated for at least 100k write/erase cycles, so no risk of burning it out with this use.
+
+### Resistor bypass switches
+
+The other change is the replacement of the many-turn variable resistor used to set the LED current with some fixed resistors and bypass switches.
+This gives less granularity and range, but introduces less inductance on the switched load.
+It also prevents accidentally overloading the ATTINY by ensuring a fixed minimum resistance.
 
 ## Prerequisites
 
