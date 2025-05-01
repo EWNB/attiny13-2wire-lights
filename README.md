@@ -23,7 +23,7 @@ Mutual or opposing dimming/flashing/pulsing of the two groups can be achieved by
 Here is my first circuit.
 It worked reasonably well, but had a few things that could be improved.
 
-![A circuit diagram depicting a 4.5V battery, power switch, decoupling capacitor, some mode-select switches between pull-ups and weaker pull-downs, a variable resistor in series with one leg of two-wire fairy lights, and all connected to an ATTINY13A micro-controller](circuit-v1.svg)
+![A circuit diagram depicting a 4.5V battery, power switch, 10 uF decoupling capacitor, some mode-select switches between 150 kOhm pull-ups and weaker 1 MOhm pull-downs, an approx. 250 Ohm variable resistor in series with one leg of two-wire fairy lights, and all connected to an ATTINY13A micro-controller](circuit-v1.svg)
 
 | ATTINY13A | Signal |
 | --------- | ------ |
@@ -88,7 +88,7 @@ Perhaps  alkaline cells are happy regardless if the current is only a few millia
 Here is my second circuit.
 The separate mode switches are gone, and variable resistor replaced with fixed resistors with bypass switches.
 
-TODO: circuit diagram.
+![A circuit diagram depicting a 4.5V battery, power switch, 10 uF decoupling capacitor, three resistors (100 Ohm, 100 Ohm, and 220 Ohm) in series with one leg of two-wire fairy lights, two switches allowing two of the series resistors to be shorted, and all connected to an ATTINY13A micro-controller](circuit-v2.svg)
 
 | ATTINY13A | Signal |
 | --------- | ------ |
