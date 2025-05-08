@@ -150,7 +150,7 @@ void main() {
   }
 
   while (1) {
-    if (ucCounter == 1 && ucModeFixed == 0) {
+    if (ucModeFixed == 0 && ucCounter == 1) {
       // Fade mode - EEPROM writes (can take time)
       if (ucFadePos == 0x08) {
         // Start of mode increment period
