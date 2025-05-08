@@ -37,6 +37,41 @@
 
 enum mode {MODE_0, MODE_1, MODE_2, MODE_3, MAX_MODE};
 
+uint8_t ucCounter;
+uint8_t ucCompareA;
+uint8_t ucCompareB;
+uint8_t ucFadePos;
+uint8_t ucFadeDir;
+uint8_t ucMode;
+uint8_t ucModeFixed;
+void (*pfModeFunc)(uint8_t, uint8_t);
+
+// Various different fade animations in the form of functions.
+// Inputs (explicit): ucFadeDir, ucFadePos
+// Outputs (implicit): ucCompareA, ucCompareB
+void fadeStatic(uint8_t dir, uint8_t pos) {
+  ucCompareA = 0x80;
+  ucCompareB = 0x80;
+}
+void fadePulseTogether(uint8_t dir, uint8_t pos) {
+  ucCompareA =        (pos>>1);
+  ucCompareB = 0xFF - (pos>>1);
+}
+void fadeAlternateFull(uint8_t dir, uint8_t pos) {
+  ucCompareA = pos;
+  ucCompareB = pos;
+}
+void fadeAlternatePulse(uint8_t dir, uint8_t pos) {
+  uint8_t val = pos<<1;
+  if (dir == 1) {
+    ucCompareA = (pos < 0x80) ? val : 0xFF - val;
+    ucCompareB = 0xFF;
+  } else {
+    ucCompareA = 0x00;
+    ucCompareB = (pos < 0x80) ? 0xFF - val : val;
+  }
+}
+
 // Based on code snippet in Microchip ATtiny13A Datasheet (DS40002307A)
 uint8_t eeprom_read(uint8_t ucAddress) {
   // Wait for completion of previous write
@@ -63,14 +98,6 @@ void eeprom_write(uint8_t ucAddress, uint8_t ucData) {
   // Start EEPROM write by setting EEPE
   EECR |= (1<<EEPE);
 }
-
-uint8_t ucCounter;
-uint8_t ucCompareA;
-uint8_t ucCompareB;
-uint8_t ucFadePos;
-uint8_t ucFadeDir;
-uint8_t ucMode;
-uint8_t ucModeFixed;
 
 void main() {
   ucCounter = FADE_PERIOD;
@@ -112,6 +139,16 @@ void main() {
     if (++ucMode >= MAX_MODE) ucMode = MODE_0;
   }
 
+  if (ucMode == MODE_0) {
+    pfModeFunc = fadeStatic;
+  } else if (ucMode == MODE_1) {
+    pfModeFunc = fadePulseTogether;
+  } else if (ucMode == MODE_2) {
+    pfModeFunc = fadeAlternateFull;
+  } else /*ucMode == MODE_3*/ {
+    pfModeFunc = fadeAlternatePulse;
+  }
+
   while (1) {
     if (ucCounter == 1 && ucModeFixed == 0) {
       // Fade mode - EEPROM writes (can take time)
@@ -127,29 +164,7 @@ void main() {
       }
     } else if (ucCounter == 0) {
       // Fade animation - calculate next PWM values
-      if (ucMode == MODE_0) {
-        // Static
-        ucCompareA = 0x80;
-        ucCompareB = 0x80;
-      } else if (ucMode == MODE_1) {
-        // Pulse together
-        ucCompareA =        (ucFadePos>>1);
-        ucCompareB = 0xFF - (ucFadePos>>1);
-      } else if (ucMode == MODE_2) {
-        // Alternate - full
-        ucCompareA = ucFadePos;
-        ucCompareB = ucFadePos;
-      } else /*ucMode == MODE_3*/ {
-        // Alternate - pulse
-        uint8_t val = ucFadePos<<1;
-        if (ucFadeDir == 1) {
-          ucCompareA = (ucFadePos < 0x80) ? val : 0xFF - val;
-          ucCompareB = 0xFF;
-        } else {
-          ucCompareA = 0x00;
-          ucCompareB = (ucFadePos < 0x80) ? 0xFF - val : val;
-        }
-      }
+      pfModeFunc(ucFadeDir, ucFadePos);
       // Fade animation - advance position (0x00 -> 0xFF -> 0x00 -> ...)
       ucFadePos = ucFadeDir ? ucFadePos + 1 : ucFadePos - 1;
       ucFadeDir = (ucFadeDir || ucFadePos == 0) && ucFadePos != 0xFF;
