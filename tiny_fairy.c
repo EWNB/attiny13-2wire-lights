@@ -130,6 +130,8 @@ void main() {
   OCR0B = ucCompareB;
   // Set PMW pins OC0A + OC0B as outputs, other pins as inputs
   DDRB = (1<<DDB1) | (1<<DDB0);
+  // Enable pull-ups on otherwise floating inputs to reduce power consumption
+  PORTB = (1<<PORTB5) | (1<<PORTB4) | (1<<PORTB3) | (1<<PORTB2);
   // Enable timer overflow interrupt
   TIMSK0 = (1<<TOIE0);
 
